@@ -29,10 +29,14 @@ const describePolicy = (
     ...(document.supportUrl === undefined ? [] : [`Support: ${document.supportUrl}`]),
     "",
     settings.length === 0 ? "No managed settings." : "Settings:",
-    ...settings.map(
-      ([path, setting]) =>
-        `  ${path} = ${JSON.stringify(setting.value)} (${setting.locked ? "locked" : "default"})`,
-    ),
+    ...settings.map(([path, setting]) => {
+      const kind = !setting.locked
+        ? "default"
+        : setting.allowProjectOverride === true
+          ? "locked, projects can override"
+          : "locked";
+      return `  ${path} = ${JSON.stringify(setting.value)} (${kind})`;
+    }),
   ];
   if (document.limits !== undefined) {
     lines.push("", "Limits:", JSON.stringify(document.limits, null, 2));

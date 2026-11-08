@@ -187,6 +187,8 @@ interface Entry {
   readonly segments: Segments;
   /** As written in the policy, the encoded form. */
   readonly value: unknown;
+  /** Only a lock sets it: the lock stays out of each project's overrides. */
+  readonly allowProjectOverride: boolean;
 }
 
 interface Lock extends Entry {
@@ -197,7 +199,9 @@ interface Lock extends Entry {
 /** Locked paths as stored in the top level and in each project's overrides of `encoded`. */
 const lockTargets = (encoded: unknown, entry: Entry): ReadonlyArray<Segments> => {
   const [head] = entry.segments;
-  if (head === undefined || !PROJECT_OVERRIDE_KEYS.has(head)) return [entry.segments];
+  if (head === undefined || entry.allowProjectOverride || !PROJECT_OVERRIDE_KEYS.has(head)) {
+    return [entry.segments];
+  }
   const projects = getPath(encoded, ["projectSettingsOverrides"]);
   const projectTargets = isRecord(projects)
     ? Object.entries(projects)
@@ -273,10 +277,31 @@ export function makeManagedSettings(
         reason: `"${head}" follows "${source}"; manage "${source}" instead`,
       };
     }
-    (setting.locked ? locks : defaults).push({ path, segments, value: setting.value });
+    const allowProjectOverride = setting.allowProjectOverride === true;
+    if (
+      allowProjectOverride &&
+      !(setting.locked && head === "providerInstances" && segments.length === 2)
+    ) {
+      return {
+        _tag: "Invalid",
+        reason: `"${path}" sets allowProjectOverride, which only a locked provider instance takes`,
+      };
+    }
+    (setting.locked ? locks : defaults).push({
+      path,
+      segments,
+      value: setting.value,
+      allowProjectOverride,
+    });
   }
 
   for (const lock of locks) {
+    if (lock.allowProjectOverride && locks.some((other) => other.path === "providerInstances")) {
+      return {
+        _tag: "Invalid",
+        reason: `"${lock.path}" allows project overrides, but the lock on "providerInstances" fixes every project's switches`,
+      };
+    }
     const unheld = OVERRIDDEN_BY.find(
       ([overridden, by]) =>
         (lock.path.startsWith(overridden) || overridden.startsWith(`${lock.path}.`)) &&

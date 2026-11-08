@@ -119,9 +119,14 @@ export interface ManagedProviders {
   /**
    * Vet a write from stored `current` to `next`. Refuses enabling a disallowed driver and moving
    * a locked field off its pinned value. Pinned values a client sends back are dropped, so the
-   * user's own values return once the policy is gone.
+   * user's own values return once the policy is gone. `effective` is `next` with the settings
+   * policy's locks laid over it, which can add the instances a project switches on.
    */
-  readonly vetWrite: (current: ServerSettings, next: ServerSettings) => ProviderWriteVerdict;
+  readonly vetWrite: (
+    current: ServerSettings,
+    next: ServerSettings,
+    effective: ServerSettings,
+  ) => ProviderWriteVerdict;
   /**
    * Per driver, the instance fields users cannot change, for clients. `environment` alone means
    * every variable.
@@ -513,7 +518,11 @@ export function makeManagedProviders(
     return { _tag: "Kept", instance: echoedDefault ? undefined : kept };
   };
 
-  const vetWrite = (current: ServerSettings, next: ServerSettings): ProviderWriteVerdict => {
+  const vetWrite = (
+    current: ServerSettings,
+    next: ServerSettings,
+    effective: ServerSettings,
+  ): ProviderWriteVerdict => {
     const providerInstances: Record<string, ProviderInstanceConfig> = {};
     for (const [instanceId, instance] of Object.entries(next.providerInstances)) {
       const stored = current.providerInstances[instanceId as ProviderInstanceId];
@@ -555,7 +564,7 @@ export function makeManagedProviders(
           ?.providerInstances;
       for (const [instanceId, override] of Object.entries(overrides.providerInstances ?? {})) {
         const driver =
-          next.providerInstances[instanceId as ProviderInstanceId]?.driver ??
+          effective.providerInstances[instanceId as ProviderInstanceId]?.driver ??
           ProviderDriverKind.make(instanceId);
         if (
           override.enabled === true &&

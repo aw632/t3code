@@ -2492,6 +2492,55 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))(
         ),
     );
 
+    it.effect("leaves a project's switch for a locked instance to it when the lock allows", () =>
+      Effect.gen(function* () {
+        const service = yield* ServerSettingsModule.ServerSettingsService;
+        const projectId = ProjectId.make("project-alice");
+        const alice = ProviderInstanceId.make("claude_alice");
+        const projectWith = (instanceId: ProviderInstanceId, enabled: boolean) => ({
+          projectSettingsOverrides: {
+            [projectId]: { providerInstances: { [instanceId]: { enabled } } },
+          },
+        });
+
+        yield* service.updateSettings(projectWith(alice, true));
+        const settings = yield* service.getSettings;
+        assert.isFalse(settings.providerInstances[alice]?.enabled);
+        assert.isTrue(
+          settings.projectSettingsOverrides[projectId]?.providerInstances?.[alice]?.enabled,
+        );
+        yield* service.updateSettings(projectWith(alice, false));
+        const switchedOff = (yield* service.getSettings).projectSettingsOverrides[projectId];
+        assert.isFalse(switchedOff?.providerInstances?.[alice]?.enabled);
+
+        // A project still cannot switch on a driver the policy leaves out.
+        const refused = yield* service
+          .updateSettings(projectWith(ProviderInstanceId.make("cursor_bob"), true))
+          .pipe(Effect.flip);
+        assert.equal(refused.operation, "use-disallowed-provider");
+      }).pipe(
+        Effect.provide(
+          layerServerSettings({
+            schemaVersion: 1,
+            organization: "Example Corp",
+            settings: {
+              "providerInstances.claude_alice": {
+                value: { driver: "claudeAgent", enabled: false },
+                locked: true,
+                allowProjectOverride: true,
+              },
+              "providerInstances.cursor_bob": {
+                value: { driver: "cursor", enabled: false },
+                locked: true,
+                allowProjectOverride: true,
+              },
+            },
+            limits: { providers: { allowedDrivers: [ProviderDriverKind.make("claudeAgent")] } },
+          }),
+        ),
+      ),
+    );
+
     it.effect("lowers default runtime modes above the ceiling without rewriting them", () =>
       Effect.gen(function* () {
         const service = yield* ServerSettingsModule.ServerSettingsService;

@@ -154,6 +154,18 @@ A few settings need care:
   or pin single fields with [`providers.instances`](#providers). T3 Code refuses a lock on one
   field inside an instance. A whole-instance lock covers only that instance; to cover every
   instance of a provider, use `providers.instances`.
+- A lock on a provider instance also fixes its switch in every project. To pin how an instance
+  launches but let each project turn it on or off, add `"allowProjectOverride": true` to the lock.
+  Only a lock on one instance, `providerInstances.<id>`, accepts it. Projects still cannot turn on
+  a provider that [`allowedDrivers`](#providers) leaves out.
+
+  ```json
+  "providerInstances.claude_alice": {
+    "value": { "driver": "claudeAgent", "enabled": false, "displayName": "Claude (Alice)" },
+    "locked": true,
+    "allowProjectOverride": true
+  }
+  ```
 
 ## Limits
 

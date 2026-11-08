@@ -1185,7 +1185,11 @@ const make = Effect.gen(function* () {
             managedBy: managedPolicy?.organization,
           });
         }
-        const vettedProviders = managedProviders.vetWrite(current, vetted.settings);
+        const vettedProviders = managedProviders.vetWrite(
+          current,
+          vetted.settings,
+          managed.applyLocks(vetted.settings),
+        );
         if (vettedProviders._tag === "Locked") {
           return yield* new ServerSettingsError({
             settingsPath,

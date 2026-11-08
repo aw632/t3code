@@ -142,6 +142,41 @@ it.layer(NodeServices.layer)("ManagedPolicy.load", (it) => {
               },
             },
           }),
+          // Only a provider instance's lock can leave projects their own switch.
+          JSON.stringify({
+            ...base,
+            settings: {
+              enableAgentDeviceAccess: { value: false, locked: true, allowProjectOverride: true },
+            },
+          }),
+          JSON.stringify({
+            ...base,
+            settings: {
+              "providerInstances.codex_work": {
+                value: { driver: "codex" },
+                locked: false,
+                allowProjectOverride: true,
+              },
+            },
+          }),
+          JSON.stringify({
+            ...base,
+            settings: {
+              providerInstances: { value: {}, locked: true, allowProjectOverride: true },
+            },
+          }),
+          // The whole-record lock would still fix the instance's switch in every project.
+          JSON.stringify({
+            ...base,
+            settings: {
+              providerInstances: { value: {}, locked: true },
+              "providerInstances.codex_work": {
+                value: { driver: "codex" },
+                locked: true,
+                allowProjectOverride: true,
+              },
+            },
+          }),
           // Startup reads OTLP endpoints before the policy, and environment variables outrank them.
           JSON.stringify({
             ...base,
@@ -154,7 +189,7 @@ it.layer(NodeServices.layer)("ManagedPolicy.load", (it) => {
             Effect.map((error) => error.reason),
           ),
       );
-      assert.lengthOf(reasons, 14);
+      assert.lengthOf(reasons, 18);
       assert.include(reasons[3], "storageCleanup.logsAfterDayz");
       assert.include(reasons[6], "adds entries users could not remove");
       assert.include(reasons[7], "adds entries users could not remove");
@@ -163,7 +198,11 @@ it.layer(NodeServices.layer)("ManagedPolicy.load", (it) => {
       assert.include(reasons[10], 'lock "worktreeCleanup" too');
       assert.include(reasons[11], 'lock "providerInstances.codex" as a whole');
       assert.include(reasons[12], "holds a credential");
-      assert.include(reasons[13], "a policy cannot override");
+      for (const reason of reasons.slice(13, 16)) {
+        assert.include(reason, "only a locked provider instance takes");
+      }
+      assert.include(reasons[16], "fixes every project's switches");
+      assert.include(reasons[17], "a policy cannot override");
     }),
   );
 
@@ -251,13 +290,14 @@ it.layer(NodeServices.layer)("ManagedPolicy.load", (it) => {
         const linux = yield* policyOn("linux");
         const shown = linux.providers.applyLimits(settings);
         const codexId = ProviderInstanceId.make("codex");
-        const saved = linux.providers.vetWrite(settings, {
+        const edited = {
           ...shown,
           providerInstances: {
             ...shown.providerInstances,
             [codexId]: { ...shown.providerInstances[codexId]!, displayName: "Codex (work)" },
           },
-        });
+        };
+        const saved = linux.providers.vetWrite(settings, edited, edited);
         assert.equal(saved._tag, "Allowed");
         const savedEnvironment =
           saved._tag === "Allowed"

@@ -13,6 +13,8 @@ import { isRuntimeModeAbove, RuntimeMode } from "./providerPolicy.ts";
 export const ManagedPolicySetting = Schema.Struct({
   value: Schema.Unknown,
   locked: Schema.Boolean,
+  /** On a locked `providerInstances` entry, leaves each project's on/off switch to the project. */
+  allowProjectOverride: Schema.optionalKey(Schema.Boolean),
 });
 export type ManagedPolicySetting = typeof ManagedPolicySetting.Type;
 
